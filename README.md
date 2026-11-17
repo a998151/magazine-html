@@ -91,19 +91,35 @@ python3 scripts/verify_html.py book.html
 
 ## 验收器做什么
 
-`verify_html.py` 不是摆设，它会用 headless Chrome 注入探针脚本，**真的去点每个按钮**再读回状态：
+`verify_html.py` 不是摆设，它分两层：
+
+**静态检查**（不需要浏览器）
+- 页面上每个 `data-act` 是否都有对应的 JS 处理分支 —— 这是"漏绑一个 id 就废掉后面全部"的安全网
+- 样式表/正文里有没有没内嵌的 `url(...)` 外部依赖
+
+**运行时检查**（headless Chrome 注入探针，**真的去点每个按钮**再读回状态）
 
 | 检查项 | 含义 |
 | --- | --- |
 | `errors` | 页面有没有 JS 运行时错误 |
 | `fs` / `lh` | 字号、行距按钮是否真的生效 |
-| `theme` / `swatch` | 主题切换与选中态是否正确 |
+| `theme` / `swatch` | 四个主题色板是否都生效、选中态是否正确 |
 | `drawerOpen` / `drawerClose` / `curBtn` | 目录抽屉三条打开路径 |
 | `toc` | 目录条目数与文档 section 数是否一致 |
-| `imgs` | 图片是否全部内嵌（`ext=0`） |
+| `imgs` | 正文图片是否全部内嵌（`ext=0`） |
+| `lamp` | 点插图能否弹出灯箱 |
+| `topBtn` | 回到顶部按钮是否浮现 |
+| `keyM` | 快捷键 M 能否开关抽屉 |
 | `overflow` | 700 / 1024 / 1440 三种宽度下有没有横向滚动条 |
 
 不跑验收就交付，等于把「按钮按了没反应」这种问题留给用户。
+
+```bash
+python3 scripts/verify_html.py book.html
+# 静态检查：12 个 data-act 全部有处理分支 ✓
+#   宽 700px ✓ errors=0 fs=ok lh=ok theme=ok ... overflow=ok
+# ✓ 全部通过
+```
 
 ---
 

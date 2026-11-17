@@ -70,7 +70,7 @@
     else if(e.key==='Home'){go(0);e.preventDefault()}
     else if(e.key==='End'){go(secs.length-1);e.preventDefault()}
     else if(e.key==='Escape'){toggle(false)}
-    else if(e.key==='m'){toggle()}
+    else if(e.key==='m'||e.key==='M'){toggle()}
   });
 
   var bar=$('prog'), now=$('now'), top=$('topbtn');

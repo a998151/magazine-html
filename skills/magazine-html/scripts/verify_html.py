@@ -67,15 +67,23 @@ PROBE = r"""
         return ok ? 'ok' : 'FAIL';
       });
 
-      // 主题
+      // 主题：四个色板都要能切
       ck('theme', function(){
-        q('[data-act="theme:night"]').click();
-        return document.documentElement.getAttribute('data-theme') === 'night' ? 'ok' : 'FAIL';
+        var ok = true, t;
+        ['paper','white','sepia','night'].forEach(function(name){
+          q('[data-act="theme:' + name + '"]').click();
+          t = document.documentElement.getAttribute('data-theme');
+          if (t !== name) ok = false;
+        });
+        q('[data-act="theme:paper"]').click();
+        return ok ? 'ok' : 'FAIL';
       });
       ck('swatch', function(){
-        return q('[data-act="theme:night"]').classList.contains('on') ? 'ok' : 'FAIL';
+        q('[data-act="theme:night"]').click();
+        var ok = q('[data-act="theme:night"]').classList.contains('on');
+        q('[data-act="theme:paper"]').click();
+        return ok ? 'ok' : 'FAIL';
       });
-      q('[data-act="theme:paper"]').click();
 
       // 抽屉
       ck('drawerOpen', function(){
@@ -108,6 +116,39 @@ PROBE = r"""
           if (s.indexOf('data:') !== 0) ext++;
         }
         return imgs.length + '/ext=' + ext + (ext === 0 ? ':ok' : ':FAIL');
+      });
+
+      // 灯箱：点正文里的图应弹出
+      ck('lamp', function(){
+        var img = document.querySelector('section.doc figure img');
+        if (!img) return 'FAIL(no img)';
+        img.click();
+        var ok = q('#lamp').classList.contains('on');
+        q('#lamp').click();
+        return ok ? 'ok' : 'FAIL';
+      });
+
+      // 回到顶部按钮（页面开了 scroll-behavior:smooth，测量时临时关掉）
+      ck('topBtn', function(){
+        var root = document.documentElement;
+        var prev = root.style.scrollBehavior;
+        root.style.scrollBehavior = 'auto';
+        window.scrollTo(0, 1500);
+        window.dispatchEvent(new Event('scroll'));
+        var btn = q('#topbtn');
+        var shown = btn ? btn.classList.contains('on') : false;
+        root.style.scrollBehavior = prev;
+        window.scrollTo(0, 0);
+        window.dispatchEvent(new Event('scroll'));
+        return !btn ? 'FAIL(no btn)' : (shown ? 'ok' : 'FAIL');
+      });
+
+      // 快捷键 M 开关抽屉
+      ck('keyM', function(){
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'M', bubbles:true}));
+        var ok = q('#drawer').classList.contains('on');
+        document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
+        return ok ? 'ok' : 'FAIL';
       });
 
       // 横向溢出
@@ -161,6 +202,37 @@ def run_probe(chrome, html_path: Path, width: int):
         probe_file.unlink(missing_ok=True)
 
 
+def static_checks(html_path: Path):
+    """不需要浏览器的静态检查：data-act 覆盖率 + CSS 外部依赖"""
+    html = html_path.read_text(encoding="utf-8")
+    problems = []
+
+    # 1) 每个 data-act 都必须有对应的 JS 分支
+    acts = sorted(set(re.findall(r'data-act="([^"]+)"', html)))
+    scripts = "\n".join(re.findall(r"<script[^>]*>(.*?)</script>", html, re.S))
+    uncovered = []
+    for act in acts:
+        if act.startswith("theme:"):
+            ok = "theme:" in scripts
+        else:
+            ok = f"'{act}'" in scripts or f'"{act}"' in scripts
+        if not ok:
+            uncovered.append(act)
+    if uncovered:
+        problems.append(f"这些 data-act 在 JS 里没有处理分支：{', '.join(uncovered)}")
+
+    # 2) 样式表里的 url(...) 是否都内嵌了
+    ext_urls = []
+    for m in re.finditer(r"url\(\s*['\"]?([^'\")]+)", html):
+        u = m.group(1).strip()
+        if not u.startswith("data:") and not u.startswith("#"):
+            ext_urls.append(u)
+    if ext_urls:
+        problems.append(f"样式/内容里有外部依赖 url()：{', '.join(sorted(set(ext_urls))[:5])}")
+
+    return acts, problems
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("html")
@@ -180,8 +252,20 @@ def main():
     print(f"浏览器：{chrome}")
     print(f"文件：{html_path}（{html_path.stat().st_size / 1024 / 1024:.2f} MB）\n")
 
-    widths = [int(w) for w in args.widths.split(",") if w.strip()]
     failures = []
+
+    # 静态检查
+    acts, problems = static_checks(html_path)
+    print(f"静态检查：{len(acts)} 个 data-act 全部有处理分支 ✓" if not problems else "静态检查：")
+    for p in problems:
+        print(f"  ✗ {p}")
+        failures.append(p)
+    if not problems:
+        print("静态检查：data-act 覆盖率 / 外部 url() 依赖 ✓")
+    print()
+
+    # 运行时检查
+    widths = [int(w) for w in args.widths.split(",") if w.strip()]
     for w in widths:
         r = run_probe(chrome, html_path, w)
         if r is None:
@@ -189,7 +273,7 @@ def main():
             failures.append(f"宽度 {w} 探针无响应")
             continue
         bad = [k for k, v in r.items()
-               if v.startswith("FAIL") or (k == "errors" and v != "0")]
+               if v.startswith("FAIL") or v.startswith("THREW") or (k == "errors" and v != "0")]
         flag = "✓" if not bad else "✗"
         print(f"  宽 {w}px {flag} " + "  ".join(f"{k}={v}" for k, v in r.items()))
         for k in bad:
@@ -201,7 +285,7 @@ def main():
         for f in failures:
             print("  ✗", f)
         sys.exit(1)
-    print("✓ 全部通过：按钮功能 / 抽屉 / 目录 / 图片内嵌 / 无横向溢出 / 无 JS 错误")
+    print("✓ 全部通过：按钮功能 / 抽屉 / 目录 / 图片内嵌 / 无横向溢出 / 无 JS 错误 / data-act 全覆盖 / 无外部依赖")
 
 
 if __name__ == "__main__":

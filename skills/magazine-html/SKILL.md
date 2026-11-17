@@ -24,10 +24,13 @@ description: |
 
 ## Procedure
 
+记 `SKILL_DIR` = 本 skill 所在目录（装了 skills 的地方，例如 `~/.agents/skills/magazine-html`）。
+下面的命令里 `scripts/` 和 `references/` 都是相对 **SKILL_DIR** 的，**不在 skill 目录里执行会找不到文件**。
+
 ### 1. 转
 
 ```bash
-python3 scripts/epub_to_html.py book.epub -o out.html
+python3 <SKILL_DIR>/scripts/epub_to_html.py book.epub -o out.html
 # 只出正文、不要外壳： --no-shell
 ```
 
@@ -41,12 +44,18 @@ python3 scripts/epub_to_html.py book.epub -o out.html
 ### 2. 验收（不能跳）
 
 ```bash
-python3 scripts/verify_html.py out.html
+python3 <SKILL_DIR>/scripts/verify_html.py out.html
 ```
 
-它会用 headless Chrome 注入探针脚本，**真的去点每个按钮**再读回状态，检查：
-无 JS 错误 / 字号生效 / 行距生效 / 主题生效且选中态正确 / 抽屉能开能关 / 目录条目数与 section 数一致 /
-图片全部内嵌无外链 / 700·1024·1440 三种宽度下无横向溢出。
+它分两层：
+
+**静态检查**（不用浏览器）：页面上每个 `data-act` 是否都有 JS 处理分支；样式/正文里有没有
+没内嵌的 `url(...)` 外部依赖。
+
+**运行时检查**（headless Chrome 注入探针，**真的去点每个按钮**再读回状态）：
+无 JS 错误 / 字号生效 / 行距生效 / 四个主题色板都生效且选中态正确 / 抽屉能开能关 /
+当前章节键能开抽屉 / 目录条目数与 section 数一致 / 正文图片全部内嵌 / 灯箱能弹 /
+回到顶部按钮会浮现 / 快捷键 M 能开抽屉 / 700·1024·1440 三种宽度下无横向溢出。
 
 不跑这一步就交付，等于把"按钮按了没反应"这种问题留给用户。
 
@@ -74,8 +83,15 @@ python3 scripts/verify_html.py out.html
 6. **工具栏用 flex 时必须 `flex-wrap:wrap` + 子项 `min-width:0`**，
    否则窄窗口下内容撑出横向滚动条（`scrollWidth > clientWidth`）。
 
-7. **章节标题提取要有兜底顺序**：`h1` → `titlepage` 判为"封面" → `div.book-title` → `第 N 节`。
-   只取 `h1` 会让封面页显示成"第 1 节"。
+7. **章节标题提取要有兜底顺序**：`NCX 里的 navLabel` → `文档里的 <h1>` →
+   `titlepage` 判为"封面" → `div.book-title` → `第 N 节`。
+   只取 `<h1>` 会让封面页显示成"第 1 节"。
+
+8. **验收器本身也会写崩**。探针里 `getAttribute('src')` 可能返回 null
+   （比如灯箱里那张还没有 src 的 `<img>`），后面 `null.indexOf(...)` 会抛异常，
+   **整个探针静默失效**——你会看到"验收通过"其实是没跑。
+   写探针时：取值一律兜底（`|| ''`），每项检查独立 try/catch，
+   并且让验收脚本能区分"探针没响应"和"检查项失败"。
 
 ## Output contract
 
@@ -90,7 +106,8 @@ python3 scripts/verify_html.py out.html
 - **验收报 `ext>0`（图片没内嵌）**：有图片引用了包外路径，检查 EPUB 里该文件是否在 manifest 里
 - **验收报横向溢出**：多半是工具栏或某个超宽元素没加 `flex-wrap` / `min-width:0`；用探针里那句
   `document.querySelectorAll('*')` 找 `right > clientWidth` 的元素定位
-- **体积过大**：图片 base64 涨 33%，可在转换前把图压到 1200px / JPEG q75
+- **体积过大**：base64 编码本身会让图片膨胀约 33%，整份 HTML 相对原始 EPUB 通常涨 35–40%。
+  想压体积就在转换前把图压到 1200px / JPEG q75
 
 ## Examples
 
