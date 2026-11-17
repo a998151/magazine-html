@@ -1,0 +1,453 @@
+/* ==========================================================================
+   杂志版 EPUB 样式表（build_epub.py 默认注入本文件）
+   --------------------------------------------------------------------------
+   适配：Kindle（单栏）/ epubjs / Apple Books / 微信读书
+
+   设计约定
+     1) 单栏排版；图片宽度与正文栏一致，不做满幅出血；
+     2) 不写死前景色，一律继承阅读器主题色，夜间与护眼模式自动反色；
+     3) 字号、行距、间距全部相对单位，跟随阅读器的字号 / 行距设置；
+     4) 装饰基于 currentColor + opacity，深浅底色都协调；
+     5) 版心宽度交给阅读器控制（本表不设 max-width，避免抢掉 App 的版心滑杆）。
+
+   需要改成双栏时：把 .calibre_8 / .calibre_10 的 display 设为 block 并给正文容器
+   加 column-count: 2；注意 Kindle 的 KPF 对多栏支持差，双栏只在 WebView 阅读器里好看。
+   ========================================================================== */
+
+/* ------------------------------------------------------------ 1. 基础 */
+html {
+    font-size: 100%;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+.rbody {
+    margin: 0;
+    padding: 1.4em 1.1em 2.6em;
+    font-size: 18px;
+    line-height: 1.85;
+    font-family: "Source Han Serif SC", "Noto Serif SC", "Songti SC",
+                 "STSong", "SimSun", "Microsoft YaHei", serif;
+    text-align: justify;
+    text-justify: inter-ideograph;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-break: auto;
+    hyphens: none;
+}
+
+p {
+    margin: 0 0 0.65em;
+    orphans: 2;
+    widows: 2;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* 链接继承主题色，不用固定蓝 */
+a,
+a:visited {
+    color: inherit;
+    text-decoration: none;
+}
+
+a:hover,
+a:active {
+    text-decoration: underline;
+}
+
+/* --------------------------------------------- 2. 章节扉页（章号 + 章名） */
+.chapter-opener {
+    margin: 1.6em 0 0;
+    padding-bottom: 0.9em;
+    border-bottom: 1px solid currentColor;
+    opacity: 0.92;
+}
+
+.chapter-index {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.6em;
+    line-height: 1;
+    color: #b4472f;               /* 朱砂 */
+    letter-spacing: 0.04em;
+}
+
+.chapter-en {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 0.86em;
+    letter-spacing: 0.08em;
+    opacity: 0.62;
+    margin-top: 0.35em;
+}
+
+h1 {
+    margin: 0.25em 0 0;
+    font-size: 1.5em;
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: 0.16em;
+    text-align: center;
+    text-indent: 0;
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+/* 标题内的 calibre 字号包裹层归零，避免二次放大 */
+h1 .calibre1,
+h1 .calibre2,
+h1 .calibre3,
+h1 .calibre5,
+h1 .calibre6 {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* epubjs 等阅读器会给 h1 注入装饰性伪元素，这里统一清掉，只保留章名 */
+body h1::after {
+    content: none !important;
+}
+
+/* ------------------------------------------------- 3. 插图（宽度同正文栏） */
+.plate {
+    margin: 1.6em 0 1.9em;
+    padding: 0;
+}
+
+.plate img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.plate figcaption {
+    margin-top: 0.6em;
+    padding-top: 0.5em;
+    border-top: 1px solid currentColor;
+    font-size: 0.78em;
+    line-height: 1.7;
+    opacity: 0.66;
+    letter-spacing: 0.02em;
+    text-align: left;
+}
+
+.plate figcaption .en {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    letter-spacing: 0;
+    margin-left: 0.6em;
+    opacity: 0.85;
+}
+
+/* -------------------------------------------------------- 4. 正文段落 */
+.calibre_8,
+.calibre_10 {
+    display: block;
+    margin: 0 0 0.65em;
+    text-align: justify;
+    text-indent: 2em;
+    line-height: 1.85;
+}
+
+.calibre_10 {
+    margin-top: 0;
+}
+
+/* 被抽言切开的续段：不另起缩进 */
+.calibre_8.cont,
+.calibre_10.cont {
+    text-indent: 0;
+}
+
+/* 右对齐（签名、日期） */
+.calibre_9 {
+    display: block;
+    margin: 0.6em 0;
+    text-align: right;
+    text-indent: 0;
+}
+
+/* --------------------------------------------------- 5. 抽言（pull quote）
+   仅在用户明确要求做抽言时才会用到；默认不启用（抽言会改动正文）。 */
+.pullquote {
+    margin: 1.9em 0;
+    padding: 0.2em 0 0.2em 1em;
+    border-left: 3px solid #b4472f;
+    break-inside: avoid;
+}
+
+.pullquote p {
+    margin: 0;
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif;
+    font-size: 1.14em;
+    line-height: 1.85;
+    text-indent: 0;
+    text-align: left;
+}
+
+.pullquote .cite {
+    margin-top: 0.5em;
+    font-size: 0.78em;
+    letter-spacing: 0.12em;
+    opacity: 0.62;
+    text-indent: 0;
+    text-align: right;
+}
+
+/* ------------------------------------------------ 6. 注释 / 译注 */
+.calibre_11 {
+    display: block;
+    margin: 0 0 0.5em;
+    padding-left: 2.7em;
+    text-indent: -2.7em;
+    text-align: justify;
+    font-size: 0.92em;
+    line-height: 1.72;
+}
+
+.calibre_11 .calibre6 {
+    font-size: 1em;
+    line-height: inherit;
+}
+
+/* --------------------------------------------------------- 7. 版权页 */
+.calibre_ {
+    display: block;
+    margin: 0.4em 0;
+    text-align: center;
+    text-indent: 0;
+    letter-spacing: 0.05em;
+}
+
+.calibre_1 {
+    display: block;
+    margin: 0.55em 0;
+    text-align: center;
+    text-indent: 0;
+    letter-spacing: 0.08em;
+}
+
+/* --------------------------------------------------------- 8. 目录页 */
+.calibre_2 {
+    display: block;
+    margin: 1.6em 0 1.5em;
+    text-align: center;
+    text-indent: 0;
+    font-size: 1.35em;
+    font-weight: 700;
+    letter-spacing: 0.32em;
+}
+
+.calibre_3,
+.calibre_5 {
+    display: block;
+    margin: 0 0 0.55em;
+    text-align: left;
+    text-indent: 0;
+    padding-left: 1.6em;
+    line-height: 1.65;
+    letter-spacing: 0.04em;
+}
+
+.calibre_3 .calibre_4,
+.calibre_5 .calibre_4 {
+    color: inherit;
+    opacity: 0.88;
+}
+
+.calibre_3 .calibre_4:hover,
+.calibre_5 .calibre_4:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* ---------------------------------------------- 9. 脚注与注释号 */
+sup.calibre4 {
+    font-size: 0.72em;
+    line-height: 0;
+    vertical-align: super;
+}
+
+sup.calibre4 small,
+sup.calibre4 small.calibre5,
+sup.calibre4 .calibre5,
+sup.calibre4 .calibre6 {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.calibre5 {
+    font-size: 1em;
+    line-height: 1.2;
+}
+
+.calibre_4 {
+    color: inherit;
+    text-decoration: none;
+    opacity: 0.75;
+}
+
+.calibre_4:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+/* --------------------------------------------------- 10. 分页与花饰 */
+.mbp_pagebreak {
+    display: block;
+    margin: 0;
+    page-break-after: always;
+    break-after: page;
+}
+
+.endmark {
+    text-align: center;
+    margin: 2em 0 0;
+    color: #b4472f;
+    font-size: 0.95em;
+    letter-spacing: 0.8em;
+    text-indent: 0.8em;
+}
+
+.bold {
+    font-weight: bold;
+}
+
+/* 前置页不启用首字下沉（epubjs 默认对页面第一个段落下沉首字） */
+body.front-matter > p:first-of-type:not(:empty)::first-letter {
+    font-size: inherit !important;
+    float: none !important;
+    line-height: inherit !important;
+    font-weight: inherit !important;
+    margin: 0 !important;
+    color: inherit !important;
+    text-shadow: none !important;
+}
+
+/* ------------------------------------------------ 11. 开篇页（刊头） */
+.masthead {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 0.7em;
+    border-bottom: 2px solid currentColor;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.66em;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    opacity: 0.72;
+}
+
+.masthead .series {
+    font-family: "Songti SC", "STSong", serif;
+    font-size: 1.5em;
+    letter-spacing: 0.34em;
+    text-transform: none;
+    opacity: 1;
+    font-weight: 700;
+}
+
+.masthead .right b {
+    color: #b4472f;
+    font-weight: 400;
+}
+
+.hero {
+    padding: 3.2em 0 1.4em;
+}
+
+.kicker {
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 0.72em;
+    letter-spacing: 0.2em;
+    color: #b4472f;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+.book-title {
+    font-size: 2.85em;
+    line-height: 1.24;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    margin: 1em 0 0;
+    text-align: center;
+    text-indent: 0;
+}
+
+.book-title em {
+    font-style: normal;
+    color: #b4472f;
+}
+
+.book-title-en {
+    margin-top: 1em;
+    font-family: Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-size: 0.76em;
+    letter-spacing: 0.1em;
+    text-align: center;
+    opacity: 0.6;
+}
+
+.deck {
+    margin: 1.8em 0 0;
+    padding-left: 1.2em;
+    border-left: 3px solid #b4472f;
+    font-family: "Kaiti SC", "STKaiti", "Songti SC", serif;
+    font-size: 1.16em;
+    line-height: 1.95;
+    text-indent: 0;
+    text-align: left;
+}
+
+.byline {
+    margin-top: 2em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.6em;
+    font-size: 0.88em;
+    opacity: 0.82;
+}
+
+.byline .name {
+    font-size: 1.15em;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.byline .sep {
+    opacity: 0.45;
+}
+
+.byline .role {
+    opacity: 0.72;
+}
+
+.toc-strip {
+    margin-top: 2.4em;
+    border-top: 1px solid currentColor;
+    padding-top: 1.1em;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.55em 1.8em;
+}
+
+.toc-strip .item .no {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.62em;
+    letter-spacing: 0.18em;
+    color: #b4472f;
+    display: block;
+}
+
+.toc-strip .item .t {
+    font-size: 0.92em;
+    letter-spacing: 0.06em;
+    line-height: 1.5;
+}

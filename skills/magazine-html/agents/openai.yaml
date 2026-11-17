@@ -1,0 +1,3 @@
+interface:
+  display_name: "Magazine HTML"
+  short_description: "Turn an EPUB into a single-file offline magazine-style HTML reader"
