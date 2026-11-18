@@ -27,6 +27,16 @@ description: |
 记 `SKILL_DIR` = 本 skill 所在目录（装了 skills 的地方，例如 `~/.agents/skills/magazine-html`）。
 下面的命令里 `scripts/` 和 `references/` 都是相对 **SKILL_DIR** 的，**不在 skill 目录里执行会找不到文件**。
 
+### 0. 转换前确认是否生成插画
+
+先问用户是否需要生成插画，等待答复后再处理 EPUB。已明确确认的选项可直接沿用。
+
+- **不生成**：直接转换源 EPUB，跳过新图、提示词和新图注，保留并内嵌原有插图，保留原有图注。继续排版、输出单文件 HTML 并验收。
+- **生成**：给出以下三个风格，等用户选定后，按 `magazine-epub` 的配图流程生成并打包带图 EPUB，再用本 skill 转换为 HTML。把已确认的选择交给配图流程，无需重复询问。
+  - **默认 · 经典黑白木刻版画**：粗粝刀痕、强明暗对比和大块留白，保留原有凸版印刷风格。
+  - **黑白木刻 · 细线版**：用细刻线和交叉排线呈现层次，画面更细密。
+  - **低饱和水彩**：用柔和色块、淡彩晕染和纸纹表现氛围。
+
 ### 1. 转
 
 ```bash
@@ -38,8 +48,7 @@ python3 <SKILL_DIR>/scripts/epub_to_html.py book.epub -o out.html
 注入样式并套阅读器外壳。
 
 样式来源有优先级：书里的 `stylesheet.css`（杂志版 EPUB 自带）> 本 skill 的 `references/magazine.css`。
-所以「先跑 magazine-epub 做杂志版 EPUB，再跑本 skill 转 HTML」能拿到最好看的效果；
-直接转普通 EPUB 也能跑，只是正文样式会是默认杂志版。
+如需按第 0 步配图，使用配图后的 EPUB。源书没有 `stylesheet.css` 时使用默认杂志样式。
 
 ### 2. 验收（不能跳）
 
@@ -54,10 +63,10 @@ python3 <SKILL_DIR>/scripts/verify_html.py out.html
 
 **运行时检查**（headless Chrome 注入探针，**真的去点每个按钮**再读回状态）：
 无 JS 错误 / 字号生效 / 行距生效 / 四个主题色板都生效且选中态正确 / 抽屉能开能关 /
-当前章节键能开抽屉 / 目录条目数与 section 数一致 / 正文图片全部内嵌 / 灯箱能弹 /
+当前章节键能开抽屉 / 目录条目数与 section 数一致 / 正文图片全部内嵌 / 有可点击插图时灯箱能弹 /
 回到顶部按钮会浮现 / 快捷键 M 能开抽屉 / 700·1024·1440 三种宽度下无横向溢出。
 
-不跑这一步就交付，等于把"按钮按了没反应"这种问题留给用户。
+验收器的灯箱探针以 `section.doc figure img` 为点击目标。若唯一失败是 `lamp=FAIL(no img)`，先确认成品确实没有这类插图，并与源书和所选模式核对；确认后将灯箱项记为「不适用」，其余检查仍需通过。有插图时须验证内嵌与显示，生成模式另核对新图和图注。未生成模式须核对无新增插图或图注。
 
 ### 3. 交付
 
@@ -96,7 +105,7 @@ python3 <SKILL_DIR>/scripts/verify_html.py out.html
 ## Output contract
 
 - 一个 `.html` 文件（默认自带阅读器外壳）
-- 验收脚本输出「✓ 全部通过」才算完成；有 FAIL 就先修再交付
+- 其余验收项全部通过且灯箱通过或按第 2 步确认为不适用；交付时注明不适用项
 - 附一份说明：文件体积、功能清单、快捷键（`←`/`→` 翻章、`M` 目录、`Esc` 关闭）
 
 ## Failure handling
@@ -112,7 +121,7 @@ python3 <SKILL_DIR>/scripts/verify_html.py out.html
 ## Examples
 
 Input: 「把 `某书.epub` 转成 html，我在电脑上读」
-Output: `python3 scripts/epub_to_html.py 某书.epub -o 某书.html` → `python3 scripts/verify_html.py 某书.html`
+Output: 用户确认不生成插画 → `python3 scripts/epub_to_html.py 某书.epub -o 某书.html` → `python3 scripts/verify_html.py 某书.html`
 → 交付单文件 HTML + 验收结果
 
 ## Windows (win32) platform notes
