@@ -48,23 +48,46 @@ PROBE = r"""
   window.addEventListener('load', function(){
     setTimeout(function(){
       function q(s){ return document.querySelector(s); }
-      function fs(){ return getComputedStyle(document.body).fontSize; }
-      function lh(){ return getComputedStyle(document.body).lineHeight; }
+      var reading = q('section.doc:not(.cover) .rbody p') || q('section.doc:not(.cover) .rbody') || q('section.doc .rbody');
+      function fs(){ return parseFloat(getComputedStyle(reading).fontSize); }
+      function lh(){ return parseFloat(getComputedStyle(reading).lineHeight); }
 
       ck('errors', function(){ return errs.length ? errs.join(';') : '0'; });
 
-      // 字号
+      ck('settings', function(){
+        var details = q('.reading-settings');
+        details.querySelector('summary').click();
+        return details.open ? 'ok' : 'FAIL';
+      });
+
+      // 读正文算出的值，避免固定字号遮住 body 的变化
       ck('fs', function(){
         var f0 = fs(); q('[data-act="fs+"]').click();
-        var ok = fs() !== f0; q('[data-act="fs-"]').click();
-        return ok ? 'ok' : 'FAIL';
+        var bigger = fs(); q('[data-act="fs-"]').click();
+        return bigger > f0 && fs() === f0 ? 'ok' : 'FAIL';
       });
 
       // 行距
       ck('lh', function(){
         var l0 = lh(); q('[data-act="lh+"]').click();
-        var ok = lh() !== l0; q('[data-act="lh-"]').click();
-        return ok ? 'ok' : 'FAIL';
+        var taller = lh(); q('[data-act="lh-"]').click();
+        return taller > l0 && Math.abs(lh() - l0) < 0.1 ? 'ok' : 'FAIL';
+      });
+
+      ck('width', function(){
+        var slider = q('#reading-width');
+        var section = q('section.doc:not(.cover)');
+        if (!section) return '不适用';
+        var initial = slider.value;
+        function measure(value){
+          slider.value = value;
+          slider.dispatchEvent(new Event('input', {bubbles:true}));
+          return section.getBoundingClientRect().width;
+        }
+        var narrow = measure(slider.min);
+        var wide = measure(slider.max);
+        measure(initial);
+        return wide > narrow && wide <= document.documentElement.clientWidth ? 'ok' : 'FAIL';
       });
 
       // 主题：四个色板都要能切
@@ -115,13 +138,14 @@ PROBE = r"""
           var s = imgs[i].getAttribute('src') || '';
           if (s.indexOf('data:') !== 0) ext++;
         }
-        return imgs.length + '/ext=' + ext + (ext === 0 ? ':ok' : ':FAIL');
+        var broken = Array.from(imgs).filter(function(img){ return !img.complete || !img.naturalWidth }).length;
+        return !ext && !broken ? imgs.length + '/ext=0:ok' : 'FAIL(ext=' + ext + ',broken=' + broken + ')';
       });
 
       // 灯箱：点正文里的图应弹出
       ck('lamp', function(){
         var img = document.querySelector('section.doc figure img');
-        if (!img) return 'FAIL(no img)';
+        if (!img) return '不适用';
         img.click();
         var ok = q('#lamp').classList.contains('on');
         q('#lamp').click();
@@ -131,6 +155,7 @@ PROBE = r"""
       // 回到顶部按钮（页面开了 scroll-behavior:smooth，测量时临时关掉）
       ck('topBtn', function(){
         var root = document.documentElement;
+        if (root.scrollHeight - window.innerHeight <= 600) return '不适用';
         var prev = root.style.scrollBehavior;
         root.style.scrollBehavior = 'auto';
         window.scrollTo(0, 1500);

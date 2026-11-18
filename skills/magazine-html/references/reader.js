@@ -5,6 +5,10 @@
   function set(k,v){try{localStorage.setItem(K+k,v)}catch(e){}}
 
   var drawer=$('drawer'), scrim=$('scrim');
+  var settings=document.querySelector('.reading-settings');
+  var drawerTriggers=document.querySelectorAll('[aria-controls="drawer"]');
+  var widthControl=$('reading-width'), widthValue=$('reading-width-value');
+  var lastDrawerTrigger, lastImage;
   var secs=[].slice.call(document.querySelectorAll('section.doc'));
   var links=[].slice.call(document.querySelectorAll('#drawer a'));
 
@@ -23,17 +27,43 @@
     var v=$('fsv'); if(v) v.textContent=Math.round(state.fs);
     var l=$('lhv'); if(l) l.textContent=state.lh;
     [].slice.call(document.querySelectorAll('.swatches button')).forEach(function(b){
-      b.classList.toggle('on', b.getAttribute('data-act')==='theme:'+state.theme);
+      var selected=b.getAttribute('data-act')==='theme:'+state.theme;
+      b.classList.toggle('on', selected);
+      b.setAttribute('aria-pressed', String(selected));
     });
   }
 
+  function applyWidth(){
+    var width=widthControl.value;
+    root.style.setProperty('--reading-width',width+'px');
+    widthValue.textContent=width+' px';
+    widthControl.setAttribute('aria-valuetext',width+' 像素');
+  }
+  widthControl.value=get('width',widthControl.defaultValue);
+  applyWidth();
+  widthControl.addEventListener('input',function(){ applyWidth(); tick(); });
+  widthControl.addEventListener('change',function(){ set('width',widthControl.value); });
+
   function toggle(on){
     if(on===undefined) on=!drawer.classList.contains('on');
+    if(on===drawer.classList.contains('on')) return;
+    var focusWasInside=drawer.contains(document.activeElement);
     drawer.classList.toggle('on',on); scrim.classList.toggle('on',on);
+    drawer.inert=!on;
+    drawerTriggers.forEach(function(b){ b.setAttribute('aria-expanded',String(on)); });
+    if(on){
+      settings.open=false;
+      var current=drawer.querySelector('a.on');
+      if(current) current.scrollIntoView({block:'nearest',behavior:'instant'});
+      (current||drawer.querySelector('button')).focus({preventScroll:true});
+    } else if(focusWasInside && lastDrawerTrigger){
+      lastDrawerTrigger.focus({preventScroll:true});
+    }
   }
 
   // 事件委托：任何带 data-act 的按钮都走这一条路径，不会漏绑
   document.addEventListener('click',function(e){
+    if(settings.open && !settings.contains(e.target)) settings.open=false;
     var b=e.target.closest ? e.target.closest('[data-act]') : null;
     if(!b) return;
     var act=b.getAttribute('data-act');
@@ -46,6 +76,7 @@
     } else if(act.indexOf('theme:')===0){
       state.theme=act.slice(6); set('theme',state.theme); apply();
     } else if(act==='menu'||act==='cur'){
+      lastDrawerTrigger=b;
       toggle();
     } else if(act==='close'){
       toggle(false);
@@ -60,10 +91,24 @@
   function cur(){ var y=window.scrollY+140, i=0;
     secs.forEach(function(s,k){ if(s.offsetTop<=y) i=k }); return i; }
   function go(i){ if(i<0)i=0; if(i>=secs.length)i=secs.length-1;
-    window.scrollTo({top:Math.max(0,secs[i].offsetTop-64),behavior:'smooth'}); }
+    if(secs[i]) secs[i].scrollIntoView({block:'start'}); }
 
   window.addEventListener('keydown',function(e){
+    if(lamp.classList.contains('on')){
+      if(e.key==='Escape') closeLamp();
+      else if(e.key==='Tab') lampClose.focus();
+      else return;
+      e.preventDefault(); return;
+    }
+    if(settings.open && e.key==='Escape'){
+      settings.open=false;
+      settings.querySelector('summary').focus();
+      return;
+    }
     if(e.target && /INPUT|SELECT|TEXTAREA/.test(e.target.tagName)) return;
+    if(e.target.matches && e.target.matches('figure img[tabindex]') && (e.key==='Enter'||e.key===' ')){
+      e.preventDefault(); e.target.click(); return;
+    }
     var i=cur();
     if(e.key==='ArrowRight'||e.key==='j'){go(i+1);e.preventDefault()}
     else if(e.key==='ArrowLeft'||e.key==='k'){go(i-1);e.preventDefault()}
@@ -73,28 +118,50 @@
     else if(e.key==='m'||e.key==='M'){toggle()}
   });
 
-  var bar=$('prog'), now=$('now'), top=$('topbtn');
+  var bar=$('prog'), now=$('now'), top=$('topbtn'), percent=document.querySelector('.reading-percentage');
   function tick(){
     var h=document.body.scrollHeight-window.innerHeight;
-    bar.style.width=(h>0?Math.min(100,window.scrollY/h*100):0)+'%';
+    var p=h>0?Math.max(0,Math.min(100,window.scrollY/h*100)):0;
+    bar.style.width=p+'%'; percent.textContent=Math.round(p)+'%';
     var i=cur();
-    links.forEach(function(a,k){ a.classList.toggle('on',k===i) });
+    links.forEach(function(a,k){
+      a.classList.toggle('on',k===i);
+      if(k===i) a.setAttribute('aria-current','location');
+      else a.removeAttribute('aria-current');
+    });
     if(secs[i]){ now.textContent=secs[i].getAttribute('data-title')||'' }
     if(top) top.classList.toggle('on', window.scrollY>600);
   }
   window.addEventListener('scroll',tick,{passive:true});
   window.addEventListener('resize',tick);
 
-  var lamp=$('lamp'), limg=$('limg'), lcap=$('lcap');
+  var lamp=$('lamp'), limg=$('limg'), lcap=$('lcap'), lampClose=lamp.querySelector('.lamp-close');
+  document.querySelectorAll('section.doc figure img').forEach(function(img){
+    img.tabIndex=0;
+    img.setAttribute('role','button');
+    img.setAttribute('aria-label','放大插图'+(img.alt?'：'+img.alt:''));
+  });
   document.addEventListener('click',function(e){
     var img=e.target;
-    if(img && img.tagName==='IMG' && img.closest('figure')){
+    if(img && img.tagName==='IMG' && img.closest('section.doc figure')){
       var fc=img.closest('figure').querySelector('figcaption');
+      lastImage=img;
       limg.src=img.src; lcap.textContent=fc?fc.innerText:'';
-      lamp.classList.add('on'); e.preventDefault();
+      lamp.classList.add('on'); lamp.inert=false;
+      lampClose.focus({preventScroll:true}); e.preventDefault();
     }
   });
-  lamp.addEventListener('click',function(){ lamp.classList.remove('on') });
+  function closeLamp(){
+    lamp.classList.remove('on'); lamp.inert=true;
+    if(lastImage) lastImage.focus({preventScroll:true});
+  }
+  lamp.addEventListener('click',closeLamp);
+
+  var start=document.querySelector('.edition-start');
+  if(start) start.addEventListener('click',function(){
+    var target=$(start.getAttribute('href').slice(1));
+    if(target){ target.tabIndex=-1; target.focus({preventScroll:true}); }
+  });
 
   apply(); tick();
 })();
